@@ -1,0 +1,13 @@
+import { desc, eq, sql } from "drizzle-orm";
+import { ensureDashboardSchema, getDb } from "@/db";
+import { staffDemands } from "@/db/schema";
+import { getRequestUser } from "@/lib/request-user";
+import { isResponsibleName } from "@/lib/responsibles";
+
+export const dynamic="force-dynamic";
+const text=(v:unknown,m:number)=>typeof v==="string"?v.trim().slice(0,m):"";
+function validate(p:Record<string,unknown>){const staffName=text(p.staffName,120),title=text(p.title,300),details=text(p.details,3000),dueDate=text(p.dueDate,10),completed=Boolean(p.completed);return isResponsibleName(staffName)&&title&&/^\d{4}-\d{2}-\d{2}$/.test(dueDate)?{staffName,title,details,dueDate,completed,completedAt:completed?new Date().toISOString():null}:null;}
+export async function GET(){try{await ensureDashboardSchema();return Response.json({demands:await getDb().select().from(staffDemands).orderBy(desc(staffDemands.dueDate),desc(staffDemands.createdAt))});}catch(error){console.error(error);return Response.json({error:"Não foi possível carregar as demandas."},{status:500});}}
+export async function POST(request:Request){try{const value=validate(await request.json() as Record<string,unknown>);if(!value)return Response.json({error:"Revise servidor, demanda e prazo."},{status:400});await ensureDashboardSchema();const editor=getRequestUser(request);const [demand]=await getDb().insert(staffDemands).values({id:crypto.randomUUID(),...value,createdBy:editor,updatedBy:editor}).returning();return Response.json({demand},{status:201});}catch(error){console.error(error);return Response.json({error:"Não foi possível cadastrar a demanda."},{status:500});}}
+export async function PUT(request:Request){try{const p=await request.json() as Record<string,unknown>,id=text(p.id,160),value=validate(p);if(!id||!value)return Response.json({error:"Revise servidor, demanda e prazo."},{status:400});await ensureDashboardSchema();const [demand]=await getDb().update(staffDemands).set({...value,updatedBy:getRequestUser(request),updatedAt:sql`CURRENT_TIMESTAMP`}).where(eq(staffDemands.id,id)).returning();return demand?Response.json({demand}):Response.json({error:"Demanda não encontrada."},{status:404});}catch(error){console.error(error);return Response.json({error:"Não foi possível atualizar a demanda."},{status:500});}}
+export async function DELETE(request:Request){try{const {id}=await request.json() as {id?:unknown};if(typeof id!=="string"||!id)return Response.json({error:"Demanda inválida."},{status:400});await ensureDashboardSchema();await getDb().delete(staffDemands).where(eq(staffDemands.id,id));return Response.json({ok:true});}catch(error){console.error(error);return Response.json({error:"Não foi possível excluir a demanda."},{status:500});}}

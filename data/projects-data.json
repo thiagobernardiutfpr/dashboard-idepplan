@@ -1,0 +1,23 @@
+{
+  "source": {
+    "title": "Base local não incluída",
+    "url": "",
+    "spreadsheetId": "",
+    "sheetName": "",
+    "capturedAt": ""
+  },
+  "summary": {
+    "total": 0,
+    "withoutDeadline": 0,
+    "withValue": 0,
+    "informedValue": 0,
+    "byStage": {
+      "A iniciar": 0,
+      "Em desenvolvimento": 0,
+      "Aguardando dependência": 0,
+      "Em licitação": 0
+    },
+    "byPriority": {}
+  },
+  "projects": []
+}

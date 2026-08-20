@@ -1,0 +1,14 @@
+{
+  "generatedAt": "",
+  "records": 0,
+  "zoneRows": 0,
+  "qgisRows": 0,
+  "masterShards": 0,
+  "modes": {
+    "registration": { "label": "Inscrição imobiliária", "minimum": 4, "prefixSize": 4 },
+    "owner": { "label": "Proprietário", "minimum": 2, "prefixSize": 2 },
+    "address": { "label": "Endereço", "minimum": 2, "prefixSize": 2 },
+    "identifier": { "label": "Cadastro, CPF/CNPJ ou CEP", "minimum": 2, "prefixSize": 2 },
+    "territory": { "label": "Bairro, quadra, lote ou zona", "minimum": 2, "prefixSize": 2 }
+  }
+}
