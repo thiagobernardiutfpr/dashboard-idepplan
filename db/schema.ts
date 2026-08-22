@@ -347,6 +347,27 @@ export const itemAttachments = sqliteTable(
   ],
 );
 
+export const multipartAttachmentUploads = sqliteTable(
+  "multipart_attachment_uploads",
+  {
+    id: text("id").primaryKey(),
+    uploadId: text("upload_id").notNull(),
+    module: text("module").notNull(),
+    itemId: text("item_id").notNull(),
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type").notNull(),
+    fileSize: integer("file_size").notNull(),
+    r2Key: text("r2_key").notNull(),
+    uploadedBy: text("uploaded_by").notNull().default(""),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("multipart_attachment_uploads_created_at_idx").on(table.createdAt),
+  ],
+);
+
 export const processEnrichments = sqliteTable(
   "process_enrichments",
   {
@@ -379,6 +400,31 @@ export const processEnrichments = sqliteTable(
       table.propertyRegistration,
     ),
     index("process_enrichments_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
+export const eivAnalyses = sqliteTable(
+  "eiv_analyses",
+  {
+    processId: text("process_id").primaryKey(),
+    resultJson: text("result_json").notNull().default("{}"),
+    sourceFiles: text("source_files").notNull().default("[]"),
+    coverageScore: integer("coverage_score").notNull().default(0),
+    conclusion: text("conclusion").notNull().default(""),
+    analyzedAt: text("analyzed_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedBy: text("updated_by").notNull().default(""),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("eiv_analyses_score_idx").on(table.coverageScore),
+    index("eiv_analyses_updated_at_idx").on(table.updatedAt),
   ],
 );
 
@@ -426,6 +472,10 @@ export const masterPlanItems = sqliteTable(
     responsible: text("responsible").notNull(),
     stakeholders: text("stakeholders").notNull().default(""),
     legalReference: text("legal_reference").notNull().default(""),
+    legalArticle: text("legal_article").notNull().default(""),
+    legalParagraph: text("legal_paragraph").notNull().default(""),
+    legalLetter: text("legal_letter").notNull().default(""),
+    legalItem: text("legal_item").notNull().default(""),
     notes: text("notes").notNull().default(""),
     createdBy: text("created_by").notNull().default(""),
     updatedBy: text("updated_by").notNull().default(""),

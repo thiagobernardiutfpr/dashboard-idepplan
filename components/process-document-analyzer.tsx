@@ -36,7 +36,7 @@ const EMPTY_FIELDS: ExtractedProcessFields = {
 };
 
 function supported(file: ItemAttachmentRecord) {
-  return /\.(pdf|xlsx?|csv|txt|md|json)$/i.test(file.fileName) || file.contentType.startsWith("text/");
+  return /\.(pdf|docx?|png|jpe?g|dwg|xlsx?|csv|txt|md|json)$/i.test(file.fileName) || file.contentType.startsWith("text/");
 }
 
 function confidenceLabel(value: number) {
@@ -60,6 +60,7 @@ export function ProcessDocumentAnalyzer({
   const [phase, setPhase] = useState<"idle" | "loading" | "analyzing" | "ready" | "saving">("idle");
   const [error, setError] = useState("");
   const [analysisNote, setAnalysisNote] = useState("");
+  const [progress, setProgress] = useState("");
 
   const selectedFiles = useMemo(() => files.filter((file) => selectedIds.has(file.id)), [files, selectedIds]);
 
@@ -68,6 +69,7 @@ export function ProcessDocumentAnalyzer({
     setPhase("loading");
     setError("");
     setAnalysisNote("");
+    setProgress("");
     try {
       const response = await fetch(`/api/attachments?module=processes&itemId=${encodeURIComponent(process.id)}`, { cache: "no-store" });
       const payload = (await response.json()) as { attachments?: ItemAttachmentRecord[]; error?: string };
@@ -92,7 +94,7 @@ export function ProcessDocumentAnalyzer({
 
   async function analyze() {
     if (!selectedFiles.length) {
-      setError("Selecione ao menos um PDF, Excel, CSV ou arquivo de texto.");
+      setError("Selecione ao menos um PDF, Word, imagem, DWG, Excel, CSV ou arquivo de texto.");
       return;
     }
     setPhase("analyzing");
@@ -102,16 +104,17 @@ export function ProcessDocumentAnalyzer({
       const skipped: string[] = [];
       for (const attachment of selectedFiles) {
         try {
+          setProgress(`Lendo ${attachment.fileName}…`);
           const response = await fetch(`/api/attachments/${attachment.id}`, { cache: "no-store" });
           if (!response.ok) throw new Error("Falha ao baixar");
           const blob = await response.blob();
-          textBlocks.push(await extractSearchableText(new File([blob], attachment.fileName, { type: attachment.contentType })));
+          textBlocks.push(await extractSearchableText(new File([blob], attachment.fileName, { type: attachment.contentType }), setProgress));
         } catch {
           skipped.push(attachment.fileName);
         }
       }
       const text = textBlocks.join("\n");
-      if (!text.trim()) throw new Error("Nenhum texto pesquisável foi encontrado. Se o PDF for digitalizado, envie também uma versão Excel ou PDF com OCR.");
+      if (!text.trim()) throw new Error("Nenhum texto recuperável foi encontrado nos arquivos selecionados.");
       const result = analyzeProcessText(text, process);
       setFields((current) => ({
         ...current,
@@ -120,9 +123,11 @@ export function ProcessDocumentAnalyzer({
       setConfidence(result.confidence);
       setAnalysisNote(`${Object.values(result.fields).filter(Boolean).length} campos sugeridos a partir de ${textBlocks.length} arquivo${textBlocks.length === 1 ? "" : "s"}${skipped.length ? `; ${skipped.length} sem leitura textual` : ""}.`);
       setPhase("ready");
+      setProgress("");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível analisar os documentos.");
       setPhase("idle");
+      setProgress("");
     }
   }
 
@@ -174,6 +179,7 @@ export function ProcessDocumentAnalyzer({
               <button type="button" className="secondary-button" onClick={() => void analyze()} disabled={phase === "loading" || phase === "analyzing" || !selectedFiles.length}>
                 {phase === "analyzing" ? <LoaderCircle size={17} className="spin" /> : <Sparkles size={17} />} {phase === "analyzing" ? "Analisando…" : "Analisar documentos"}
               </button>
+              {progress ? <p className="analysis-progress"><LoaderCircle size={15} className="spin" /> {progress}</p> : null}
             </section>
 
             {analysisNote ? <div className="analysis-success"><CheckCircle2 size={17} /> {analysisNote}</div> : null}
@@ -199,4 +205,3 @@ export function ProcessDocumentAnalyzer({
     </>
   );
 }
-

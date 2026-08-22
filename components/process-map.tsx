@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { LayerGroup, Map as LeafletMap, TileLayer } from "leaflet";
 import type { MappedProcess } from "@/lib/dashboard-types";
 import { MapViewControls } from "@/components/map-view-controls";
@@ -12,6 +12,7 @@ type ProcessMapProps = {
   selectedProcessId: string;
   onPickCoordinate: (latitude: number, longitude: number) => void;
   onSelectProcess: (processId: string) => void;
+  onCaptureApi?: (capture: (() => Promise<Blob | null>) | null) => void;
 };
 
 const APUCARANA_CENTER: [number, number] = [-23.5505, -51.4614];
@@ -53,6 +54,7 @@ export function ProcessMap({
   selectedProcessId,
   onPickCoordinate,
   onSelectProcess,
+  onCaptureApi,
 }: ProcessMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -219,13 +221,22 @@ export function ProcessMap({
     });
   }
 
+  const captureMap = useCallback(async () => {
+    if (!containerRef.current) return null;
+    const { toBlob } = await import("html-to-image");
+    return toBlob(containerRef.current, { cacheBust: true, pixelRatio: 2, backgroundColor: "#06101b" });
+  }, []);
+
+  useEffect(() => {
+    onCaptureApi?.(captureMap);
+    return () => onCaptureApi?.(null);
+  }, [captureMap, onCaptureApi]);
+
   async function exportPng() {
-    if (!containerRef.current) return;
     setExporting(true);
     setExportMessage("");
     try {
-      const { toBlob } = await import("html-to-image");
-      const blob = await toBlob(containerRef.current, { cacheBust: true, pixelRatio: 2, backgroundColor: "#06101b" });
+      const blob = await captureMap();
       if (!blob) throw new Error("A imagem do mapa não pôde ser gerada.");
       const dataUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");

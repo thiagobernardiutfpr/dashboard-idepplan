@@ -49,6 +49,14 @@ export function ensureDashboardSchema() {
         "CREATE INDEX IF NOT EXISTS process_coordinates_updated_at_idx ON process_coordinates (updated_at)",
       ),
       binding.prepare(`
+        CREATE TABLE IF NOT EXISTS dashboard_login_attempts (
+          attempt_key TEXT PRIMARY KEY NOT NULL,
+          failures INTEGER NOT NULL DEFAULT 0,
+          blocked_until INTEGER NOT NULL DEFAULT 0,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `),
+      binding.prepare(`
         CREATE TABLE IF NOT EXISTS module_assignments (
           module TEXT NOT NULL,
           item_id TEXT NOT NULL,
@@ -295,6 +303,15 @@ export function ensureDashboardSchema() {
       binding.prepare(
         "CREATE INDEX IF NOT EXISTS item_attachments_created_at_idx ON item_attachments (created_at)",
       ),
+      binding.prepare(`CREATE TABLE IF NOT EXISTS multipart_attachment_uploads (
+        id TEXT PRIMARY KEY NOT NULL, upload_id TEXT NOT NULL, module TEXT NOT NULL,
+        item_id TEXT NOT NULL, file_name TEXT NOT NULL, content_type TEXT NOT NULL,
+        file_size INTEGER NOT NULL, r2_key TEXT NOT NULL, uploaded_by TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`),
+      binding.prepare(
+        "CREATE INDEX IF NOT EXISTS multipart_attachment_uploads_created_at_idx ON multipart_attachment_uploads (created_at)",
+      ),
       binding.prepare(`CREATE TABLE IF NOT EXISTS process_enrichments (
         process_id TEXT PRIMARY KEY NOT NULL,
         property_registration TEXT NOT NULL DEFAULT '', lot TEXT NOT NULL DEFAULT '',
@@ -311,6 +328,19 @@ export function ensureDashboardSchema() {
       ),
       binding.prepare(
         "CREATE INDEX IF NOT EXISTS process_enrichments_updated_at_idx ON process_enrichments (updated_at)",
+      ),
+      binding.prepare(`CREATE TABLE IF NOT EXISTS eiv_analyses (
+        process_id TEXT PRIMARY KEY NOT NULL,
+        result_json TEXT NOT NULL DEFAULT '{}', source_files TEXT NOT NULL DEFAULT '[]',
+        coverage_score INTEGER NOT NULL DEFAULT 0, conclusion TEXT NOT NULL DEFAULT '',
+        analyzed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_by TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`),
+      binding.prepare(
+        "CREATE INDEX IF NOT EXISTS eiv_analyses_score_idx ON eiv_analyses (coverage_score)",
+      ),
+      binding.prepare(
+        "CREATE INDEX IF NOT EXISTS eiv_analyses_updated_at_idx ON eiv_analyses (updated_at)",
       ),
       binding.prepare(`CREATE TABLE IF NOT EXISTS party_expenses (
         id TEXT PRIMARY KEY NOT NULL, event_name TEXT NOT NULL, expense_date TEXT NOT NULL,
@@ -331,6 +361,8 @@ export function ensureDashboardSchema() {
         item_type TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', start_date TEXT NOT NULL,
         due_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Não iniciado', progress INTEGER NOT NULL DEFAULT 0,
         responsible TEXT NOT NULL, stakeholders TEXT NOT NULL DEFAULT '', legal_reference TEXT NOT NULL DEFAULT '',
+        legal_article TEXT NOT NULL DEFAULT '', legal_paragraph TEXT NOT NULL DEFAULT '',
+        legal_letter TEXT NOT NULL DEFAULT '', legal_item TEXT NOT NULL DEFAULT '',
         notes TEXT NOT NULL DEFAULT '', created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )`),
@@ -473,12 +505,15 @@ export function ensureDashboardSchema() {
       ),
     ])
     .then(async () => {
-      const [processColumns, projectColumns] = await Promise.all([
+      const [processColumns, projectColumns, masterPlanColumns] = await Promise.all([
         binding
           .prepare("PRAGMA table_info(manual_processes)")
           .all<{ name: string }>(),
         binding
           .prepare("PRAGMA table_info(manual_projects)")
+          .all<{ name: string }>(),
+        binding
+          .prepare("PRAGMA table_info(master_plan_items)")
           .all<{ name: string }>(),
       ]);
       const additions = [];
@@ -503,6 +538,15 @@ export function ensureDashboardSchema() {
             "ALTER TABLE manual_projects ADD COLUMN property_registration TEXT NOT NULL DEFAULT ''",
           ),
         );
+      }
+      for (const [name, sql] of [
+        ["legal_article", "ALTER TABLE master_plan_items ADD COLUMN legal_article TEXT NOT NULL DEFAULT ''"],
+        ["legal_paragraph", "ALTER TABLE master_plan_items ADD COLUMN legal_paragraph TEXT NOT NULL DEFAULT ''"],
+        ["legal_letter", "ALTER TABLE master_plan_items ADD COLUMN legal_letter TEXT NOT NULL DEFAULT ''"],
+        ["legal_item", "ALTER TABLE master_plan_items ADD COLUMN legal_item TEXT NOT NULL DEFAULT ''"],
+      ] as const) {
+        if (!masterPlanColumns.results.some((column) => column.name === name))
+          additions.push(binding.prepare(sql));
       }
       if (additions.length) await binding.batch(additions);
     })

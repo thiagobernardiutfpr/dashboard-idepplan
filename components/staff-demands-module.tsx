@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ItemFilesButton } from "@/components/item-lifecycle";
 import type { StaffDemandRecord, StaffMessageRecord, StaffProfileRecord } from "@/lib/dashboard-types";
 import { RESPONSIBLE_OPTIONS } from "@/lib/responsibles";
+import { readApiJson } from "@/lib/api-client";
 
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 const localToday = () => {
@@ -90,9 +91,10 @@ export function StaffDemandsModule() {
   async function uploadProfile(file: File) {
     setSaving(true); setError("");
     try {
+      if (file.size > 8 * 1024 * 1024) throw new Error("A foto ou o PDF de perfil deve ter até 8 MB.");
       const form = new FormData(); form.set("staffName", uploadStaff.current); form.set("file", file);
       const response = await fetch("/api/staff-profiles", { method: "POST", body: form });
-      const payload = await response.json() as { profile?: StaffProfileRecord; error?: string };
+      const payload = await readApiJson<{ profile?: StaffProfileRecord; error?: string }>(response);
       if (!response.ok || !payload.profile) throw new Error(payload.error ?? "Falha ao enviar a foto.");
       setProfiles((current) => ({ ...current, [payload.profile!.staffName]: payload.profile! }));
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Falha ao enviar a foto."); }

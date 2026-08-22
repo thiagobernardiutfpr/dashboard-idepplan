@@ -289,6 +289,10 @@ export type MasterPlanRecord = {
   responsible: string;
   stakeholders: string;
   legalReference: string;
+  legalArticle: string;
+  legalParagraph: string;
+  legalLetter: string;
+  legalItem: string;
   notes: string;
   createdBy: string;
   updatedBy: string;

@@ -27,6 +27,10 @@ function validate(payload: Record<string, unknown>) {
     responsible: text(payload.responsible, 120),
     stakeholders: text(payload.stakeholders, 2000),
     legalReference: text(payload.legalReference, 500),
+    legalArticle: text(payload.legalArticle, 80),
+    legalParagraph: text(payload.legalParagraph, 80),
+    legalLetter: text(payload.legalLetter, 40),
+    legalItem: text(payload.legalItem, 80),
     notes: text(payload.notes, 3000),
   };
   if (!value.title || !value.phase || !value.itemType || !value.startDate || !value.dueDate) return null;

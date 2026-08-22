@@ -1,12 +1,8 @@
 {
-  "generatedAt": "",
-  "sourceFile": "",
+  "generatedAt": null,
   "sourceRows": 0,
   "coordinateRows": 0,
   "registrations": 0,
-  "invalidRegistrationRows": 0,
-  "invalidCoordinateRows": 0,
-  "ambiguousRegistrations": 0,
   "prefixSize": 4,
   "coordinateSystem": "SIRGAS 2000 / graus decimais"
 }

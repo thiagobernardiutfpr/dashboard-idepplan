@@ -22,6 +22,7 @@ import {
   Landmark,
   ListTodo,
   LoaderCircle,
+  LogOut,
   MapPinned,
   Monitor,
   Plus,
@@ -77,6 +78,8 @@ import { PaiModule } from "@/components/pai-module";
 import { ZoningBadge } from "@/components/zoning-badge";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { ProcessDocumentAnalyzer } from "@/components/process-document-analyzer";
+import { ProcessDocumentGenerator } from "@/components/process-document-generator";
+import { EivAnalyzer } from "@/components/eiv-analyzer";
 import { ProcessTypeVisibility } from "@/components/process-type-visibility";
 import { normalizeProcessClassification } from "@/lib/process-category-normalization";
 import { isDefaultActiveProcessType } from "@/lib/process-type-defaults";
@@ -297,6 +300,7 @@ export default function Dashboard({ dataset, projectsDataset }: DashboardProps) 
   const [processVisibilityMode, setProcessVisibilityMode] = useState<"default" | "custom">("default");
   const [processVisibilityReady, setProcessVisibilityReady] = useState(false);
   const mapSectionRef = useRef<HTMLElement>(null);
+  const mapCaptureRef = useRef<(() => Promise<Blob | null>) | null>(null);
   const selectedProcessRef = useRef(dataset.processes[0]?.id ?? "");
   const [activeModule, setActiveModule] = useState<DashboardModule>("processes");
   const [areaFilter, setAreaFilter] = useState("all");
@@ -755,6 +759,10 @@ export default function Dashboard({ dataset, projectsDataset }: DashboardProps) 
     return () => window.clearTimeout(timer);
   }, [resolvedCoordinates, selectedProcessId, visibleProcesses]);
 
+  const registerMapCapture = useCallback((capture: (() => Promise<Blob | null>) | null) => {
+    mapCaptureRef.current = capture;
+  }, []);
+
   const openModule = useCallback((module: DashboardModule) => {
     setActiveModule(module);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1200,6 +1208,19 @@ export default function Dashboard({ dataset, projectsDataset }: DashboardProps) 
             <Database size={21} />
           </span>
           <ThemeSwitcher />
+          <button
+            className="rail-logout"
+            type="button"
+            title="Sair do dashboard"
+            aria-label="Sair do dashboard"
+            onClick={() => {
+              void fetch("/api/auth/logout", { method: "POST" }).finally(() =>
+                window.location.replace("/login"),
+              );
+            }}
+          >
+            <LogOut size={20} />
+          </button>
         </div>
       </aside>
 
@@ -1439,6 +1460,7 @@ export default function Dashboard({ dataset, projectsDataset }: DashboardProps) 
               selectedProcessId={selectedProcessId}
               onPickCoordinate={pickCoordinate}
               onSelectProcess={(processId) => selectProcess(processId)}
+              onCaptureApi={registerMapCapture}
             />
 
             <aside className="coordinate-editor" aria-label="Cadastro de coordenadas">
@@ -1536,7 +1558,7 @@ export default function Dashboard({ dataset, projectsDataset }: DashboardProps) 
                     title={`Arquivos do processo ${selectedProcess.displayId ?? selectedProcess.id}`}
                     text
                     label="Anexar arquivos"
-                    accept=".pdf,.xls,.xlsx,.csv,.txt,.md,.json,image/*"
+                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.dwg,.xls,.xlsx,.csv,.txt,.md,.json,image/*"
                   />
                   <ProcessDocumentAnalyzer
                     process={selectedProcess}
@@ -1547,6 +1569,19 @@ export default function Dashboard({ dataset, projectsDataset }: DashboardProps) 
                     }}
                   />
                 </div>
+              ) : null}
+
+              {selectedProcess ? (
+                <>
+                  <ProcessDocumentGenerator
+                    key={selectedProcess.id}
+                    process={selectedProcess}
+                    coordinate={selectedCoordinate}
+                    zone={coordinateZone}
+                    captureMap={async () => mapCaptureRef.current?.() ?? null}
+                  />
+                  <EivAnalyzer key={`eiv:${selectedProcess.id}`} process={selectedProcess} />
+                </>
               ) : null}
 
               <div className="editor-actions">
