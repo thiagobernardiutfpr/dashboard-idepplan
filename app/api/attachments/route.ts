@@ -6,7 +6,7 @@ import type { ItemModule } from "@/lib/dashboard-types";
 
 export const dynamic = "force-dynamic";
 const MODULES: ItemModule[] = ["processes", "projects", "procurements", "agenda", "geoprocessing", "empresa-facil", "consultation", "festivals", "staff-demands", "master-plan", "councils", "pai"];
-const MAX_SIZE = 25 * 1024 * 1024;
+const MAX_SIZE = 4 * 1024 * 1024;
 function valid(itemModule: string): itemModule is ItemModule { return MODULES.includes(itemModule as ItemModule); }
 function safeName(value: string) { return value.replace(/[\u0000-\u001f<>:"/\\|?*]+/g, "-").slice(0, 180) || "arquivo"; }
 
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   try {
     const form = await request.formData(); const file = form.get("file"); const itemModule = String(form.get("module") ?? ""); const itemId = String(form.get("itemId") ?? "").trim().slice(0,240);
     if (!valid(itemModule) || !itemId || !(file instanceof File)) return Response.json({ error: "Arquivo ou item inválido." }, { status: 400 });
-    if (!file.size || file.size > MAX_SIZE) return Response.json({ error: "O arquivo deve ter até 25 MB." }, { status: 400 });
+    if (!file.size || file.size > MAX_SIZE) return Response.json({ error: "Este arquivo será enviado automaticamente em partes de 5 MB." }, { status: 413 });
     await ensureDashboardSchema();
     const id = crypto.randomUUID(); const fileName = safeName(file.name); const key = `attachments/${itemModule}/${encodeURIComponent(itemId)}/${id}-${fileName}`; const contentType = file.type || "application/octet-stream";
     await getR2Binding().put(key, await file.arrayBuffer(), { httpMetadata: { contentType } });

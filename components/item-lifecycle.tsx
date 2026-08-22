@@ -25,6 +25,7 @@ import type {
   ItemModule,
   ItemStateRecord,
 } from "@/lib/dashboard-types";
+import { readApiJson, uploadAttachment } from "@/lib/api-client";
 
 type LifecycleContextValue = {
   states: Record<string, ItemStateRecord>;
@@ -196,6 +197,12 @@ export function ItemFilesButton({
   const [files, setFiles] = useState<ItemAttachmentRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [batchStatus, setBatchStatus] = useState<{
+    current: number;
+    total: number;
+    fileName: string;
+  } | null>(null);
   const [preview, setPreview] = useState<ItemAttachmentRecord | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const load = useCallback(async () => {
@@ -206,10 +213,10 @@ export function ItemFilesButton({
         `/api/attachments?module=${encodeURIComponent(module)}&itemId=${encodeURIComponent(itemId)}`,
         { cache: "no-store" },
       );
-      const payload = (await response.json()) as {
+      const payload = await readApiJson<{
         attachments?: ItemAttachmentRecord[];
         error?: string;
-      };
+      }>(response);
       if (!response.ok) throw new Error(payload.error);
       setFiles(payload.attachments ?? []);
     } catch (reason) {
@@ -220,26 +227,51 @@ export function ItemFilesButton({
       setLoading(false);
     }
   }, [module, itemId]);
-  async function upload(file: File) {
+  async function upload(selectedFiles: FileList | File[]) {
+    const queue = Array.from(selectedFiles);
+    if (!queue.length) return;
     setLoading(true);
     setError("");
+    setUploadProgress(0);
+    const failures: string[] = [];
+    let uploaded = 0;
     try {
-      const form = new FormData();
-      form.set("module", module);
-      form.set("itemId", itemId);
-      form.set("file", file);
-      const response = await fetch("/api/attachments", {
-        method: "POST",
-        body: form,
-      });
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(payload.error);
-      await load();
-      onChange?.();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Falha no upload.");
+      for (const [index, file] of queue.entries()) {
+        setBatchStatus({
+          current: index + 1,
+          total: queue.length,
+          fileName: file.name,
+        });
+        setUploadProgress(0);
+        try {
+          await uploadAttachment({
+            file,
+            module,
+            itemId,
+            onProgress: setUploadProgress,
+          });
+          uploaded += 1;
+        } catch (reason) {
+          const message =
+            reason instanceof Error ? reason.message : "Falha no upload.";
+          failures.push(`${file.name}: ${message}`);
+        }
+      }
+      if (uploaded) {
+        await load();
+        onChange?.();
+      }
+      if (failures.length) {
+        const visibleFailures = failures.slice(0, 3).join(" · ");
+        const remaining = failures.length - 3;
+        setError(
+          `${uploaded} de ${queue.length} arquivo(s) enviado(s). ${visibleFailures}${remaining > 0 ? ` · e mais ${remaining} falha(s)` : ""}`,
+        );
+      }
     } finally {
       setLoading(false);
+      setUploadProgress(0);
+      setBatchStatus(null);
       if (input.current) input.current.value = "";
     }
   }
@@ -295,10 +327,11 @@ export function ItemFilesButton({
                 ref={input}
                 className="sr-only"
                 type="file"
+                multiple
                 accept={accept}
                 onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void upload(file);
+                  if (event.target.files?.length)
+                    void upload(event.target.files);
                 }}
               />
               <button
@@ -307,11 +340,22 @@ export function ItemFilesButton({
                 onClick={() => input.current?.click()}
                 disabled={loading}
               >
-                <UploadCloud size={18} /> Anexar arquivo
+                <UploadCloud size={18} />
+                {batchStatus
+                  ? `Enviando ${batchStatus.current}/${batchStatus.total}`
+                  : "Anexar arquivos"}
               </button>
-              <span>Até 25 MB. PDFs, imagens e áudios abrem aqui mesmo.</span>
+              <span aria-live="polite">
+                {batchStatus
+                  ? `Arquivo ${batchStatus.current} de ${batchStatus.total}: ${batchStatus.fileName} · ${uploadProgress}%`
+                  : "Selecione um ou vários arquivos. Até 500 MB por arquivo, com envio automático em partes. PDFs, imagens e áudios abrem aqui mesmo."}
+              </span>
             </div>
-            {error ? <div className="form-error">{error}</div> : null}
+            {error ? (
+              <div className="form-error" role="alert">
+                {error}
+              </div>
+            ) : null}
             <div className="attachment-list">
               {loading && !files.length ? (
                 <div className="attachment-empty">

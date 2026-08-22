@@ -18,7 +18,7 @@ const MODULES: ItemModule[] = [
   "pai",
 ];
 const TABLES: Partial<Record<ItemModule, string[]>> = {
-  processes: ["process_coordinates", "process_enrichments", "manual_processes"],
+  processes: ["process_coordinates", "process_enrichments", "eiv_analyses", "manual_processes"],
   projects: ["project_locations", "manual_projects"],
   procurements: ["procurements"],
   agenda: ["agenda_items"],

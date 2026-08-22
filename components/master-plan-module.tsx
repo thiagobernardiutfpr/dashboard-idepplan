@@ -43,6 +43,17 @@ const TYPES = [
   "Sugestão",
   "Entrega",
 ];
+const LAWS = [
+  "Lei do Plano Diretor",
+  "Lei de Uso e Ocupação do Solo",
+  "Lei do Parcelamento do Solo",
+  "Lei do Sistema Viário",
+  "Lei do Código de Obras",
+  "Código de Posturas",
+  "Lei do Meio Ambiente",
+  "Lei de Telecomunicações",
+  "Lei do Perímetro Urbano",
+];
 const STATUSES: Draft["status"][] = [
   "Não iniciado",
   "Em andamento",
@@ -66,7 +77,11 @@ const emptyDraft = (): Draft => ({
   progress: 0,
   responsible: RESPONSIBLE_OPTIONS[0],
   stakeholders: "",
-  legalReference: "",
+  legalReference: LAWS[0],
+  legalArticle: "",
+  legalParagraph: "",
+  legalLetter: "",
+  legalItem: "",
   notes: "",
 });
 const date = (value: string) =>
@@ -79,6 +94,45 @@ const normalize = (value: string) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase("pt-BR");
+const classifyLaw = (value: string) => {
+  const normalized = normalize(value);
+  const direct = LAWS.find((law) => law === value);
+  if (direct) return direct;
+  if (normalized.includes("parcelamento") || normalized.includes("loteamento")) return "Lei do Parcelamento do Solo";
+  if (normalized.includes("sistema viario") || normalized.includes("mobilidade")) return "Lei do Sistema Viário";
+  if (normalized.includes("codigo de obras")) return "Lei do Código de Obras";
+  if (normalized.includes("postura")) return "Código de Posturas";
+  if (normalized.includes("meio ambiente") || normalized.includes("ambient")) return "Lei do Meio Ambiente";
+  if (normalized.includes("telecom")) return "Lei de Telecomunicações";
+  if (normalized.includes("perimetro")) return "Lei do Perímetro Urbano";
+  if (normalized.includes("uso") || normalized.includes("ocupacao") || normalized.includes("zoneamento")) return "Lei de Uso e Ocupação do Solo";
+  return "Lei do Plano Diretor";
+};
+const legalTarget = (value: {
+  legalArticle: string;
+  legalParagraph: string;
+  legalLetter: string;
+  legalItem: string;
+}) =>
+  [
+    value.legalArticle && `Art. ${value.legalArticle}`,
+    value.legalParagraph && `§ ${value.legalParagraph}`,
+    value.legalLetter && `alínea ${value.legalLetter}`,
+    value.legalItem && `item ${value.legalItem}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+const emptySuggestion = () => ({
+  title: "",
+  theme: "",
+  article: "",
+  paragraph: "",
+  letter: "",
+  item: "",
+  description: "",
+  proposer: "",
+  responsible: RESPONSIBLE_OPTIONS[0] as string,
+});
 const csvCell = (value: unknown) =>
   `"${String(value ?? "").replaceAll('"', '""')}"`;
 
@@ -88,14 +142,9 @@ export function MasterPlanModule() {
   const [editingId, setEditingId] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [suggestionOpen, setSuggestionOpen] = useState(false);
-  const [suggestion, setSuggestion] = useState({
-    title: "",
-    theme: "Uso e ocupação do solo",
-    description: "",
-    proposer: "",
-    responsible: RESPONSIBLE_OPTIONS[0],
-  });
+  const [suggestion, setSuggestion] = useState(emptySuggestion);
   const [search, setSearch] = useState("");
+  const [law, setLaw] = useState("all");
   const [phase, setPhase] = useState("all");
   const [status, setStatus] = useState("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -131,6 +180,8 @@ export function MasterPlanModule() {
   const filtered = useMemo(
     () =>
       items.filter((item) => {
+        if (law !== "all" && classifyLaw(item.legalReference) !== law)
+          return false;
         if (phase !== "all" && item.phase !== phase) return false;
         if (status !== "all" && item.status !== status) return false;
         const query = normalize(search.trim());
@@ -145,11 +196,15 @@ export function MasterPlanModule() {
               item.responsible,
               item.stakeholders,
               item.legalReference,
+              item.legalArticle,
+              item.legalParagraph,
+              item.legalLetter,
+              item.legalItem,
             ].join(" "),
           ).includes(query)
         );
       }),
-    [items, phase, search, status],
+    [items, law, phase, search, status],
   );
   const concluded = items.filter((item) => item.status === "Concluído").length;
   const overdue = items.filter(
@@ -193,7 +248,11 @@ export function MasterPlanModule() {
       progress: item.progress,
       responsible: item.responsible,
       stakeholders: item.stakeholders,
-      legalReference: item.legalReference,
+      legalReference: classifyLaw(item.legalReference),
+      legalArticle: item.legalArticle,
+      legalParagraph: item.legalParagraph,
+      legalLetter: item.legalLetter,
+      legalItem: item.legalItem,
       notes: item.notes,
     });
     setFormOpen(true);
@@ -202,6 +261,16 @@ export function MasterPlanModule() {
     setFormOpen(false);
     setEditingId("");
     setDraft(emptyDraft());
+    setError("");
+  }
+  function openSuggestion() {
+    setSuggestion(emptySuggestion());
+    setError("");
+    setSuggestionOpen(true);
+  }
+  function closeSuggestion() {
+    setSuggestionOpen(false);
+    setSuggestion(emptySuggestion());
     setError("");
   }
 
@@ -243,11 +312,23 @@ export function MasterPlanModule() {
   }
   async function saveSuggestion(event: React.FormEvent) {
     event.preventDefault();
+    if (!suggestion.theme) {
+      setError("Escolha primeiro a lei à qual a sugestão se refere.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
+      const target = legalTarget({
+        legalArticle: suggestion.article,
+        legalParagraph: suggestion.paragraph,
+        legalLetter: suggestion.letter,
+        legalItem: suggestion.item,
+      });
       await persist({
-        title: suggestion.title,
+        title:
+          suggestion.title.trim() ||
+          ["Sugestão", suggestion.theme, target].filter(Boolean).join(" · "),
         phase: "Propostas",
         itemType: "Sugestão",
         description: suggestion.description,
@@ -258,17 +339,14 @@ export function MasterPlanModule() {
         responsible: suggestion.responsible,
         stakeholders: suggestion.proposer,
         legalReference: suggestion.theme,
+        legalArticle: suggestion.article,
+        legalParagraph: suggestion.paragraph,
+        legalLetter: suggestion.letter,
+        legalItem: suggestion.item,
         notes:
           "Sugestão inserida para análise durante a revisão do Plano Diretor.",
       });
-      setSuggestionOpen(false);
-      setSuggestion({
-        title: "",
-        theme: "Uso e ocupação do solo",
-        description: "",
-        proposer: "",
-        responsible: RESPONSIBLE_OPTIONS[0],
-      });
+      closeSuggestion();
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -343,6 +421,10 @@ export function MasterPlanModule() {
         "Situação",
         "Atores envolvidos",
         "Referência legal",
+        "Artigo",
+        "Parágrafo",
+        "Alínea",
+        "Item",
       ],
       ...filtered.map((item) => [
         item.title,
@@ -355,6 +437,10 @@ export function MasterPlanModule() {
         item.status,
         item.stakeholders,
         item.legalReference,
+        item.legalArticle,
+        item.legalParagraph,
+        item.legalLetter,
+        item.legalItem,
       ]),
     ];
     const url = URL.createObjectURL(
@@ -387,7 +473,7 @@ export function MasterPlanModule() {
           <button
             className="secondary-button suggestion-button"
             type="button"
-            onClick={() => setSuggestionOpen(true)}
+            onClick={openSuggestion}
           >
             <MessageSquarePlus size={18} /> Inserir sugestão
           </button>
@@ -460,6 +546,15 @@ export function MasterPlanModule() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Etapa, responsável ou referência"
           />
+        </label>
+        <label>
+          <span>Lei</span>
+          <select value={law} onChange={(event) => setLaw(event.target.value)}>
+            <option value="all">Todas as leis</option>
+            {LAWS.map((value) => (
+              <option key={value}>{value}</option>
+            ))}
+          </select>
         </label>
         <label>
           <span>Fase</span>
@@ -536,7 +631,7 @@ export function MasterPlanModule() {
                   />
                 </th>
                 <th>Etapa / produto</th>
-                <th>Fase</th>
+                <th>Lei / fase</th>
                 <th>Período</th>
                 <th>Responsável</th>
                 <th>Progresso</th>
@@ -567,9 +662,16 @@ export function MasterPlanModule() {
                       <small>
                         {item.itemType}
                         {item.legalReference ? ` · ${item.legalReference}` : ""}
+                        {legalTarget(item) ? ` · ${legalTarget(item)}` : ""}
                       </small>
                     </td>
-                    <td>{item.phase}</td>
+                    <td>
+                      <strong>{classifyLaw(item.legalReference)}</strong>
+                      <small>
+                        {item.phase}
+                        {legalTarget(item) ? ` · ${legalTarget(item)}` : ""}
+                      </small>
+                    </td>
                     <td>
                       <strong>{date(item.startDate)}</strong>
                       <small className={isOverdue ? "deadline-overdue" : ""}>
@@ -766,13 +868,56 @@ export function MasterPlanModule() {
                 />
               </label>
               <label>
-                <span>Referência legal</span>
-                <input
+                <span>Lei</span>
+                <select
                   value={draft.legalReference}
                   onChange={(event) =>
                     setDraft({ ...draft, legalReference: event.target.value })
                   }
-                  placeholder="Lei, decreto ou processo"
+                >
+                  {LAWS.map((value) => (
+                    <option key={value}>{value}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Artigo (opcional)</span>
+                <input
+                  value={draft.legalArticle}
+                  onChange={(event) =>
+                    setDraft({ ...draft, legalArticle: event.target.value })
+                  }
+                  placeholder="Ex.: 12"
+                />
+              </label>
+              <label>
+                <span>Parágrafo (opcional)</span>
+                <input
+                  value={draft.legalParagraph}
+                  onChange={(event) =>
+                    setDraft({ ...draft, legalParagraph: event.target.value })
+                  }
+                  placeholder="Ex.: 2º ou único"
+                />
+              </label>
+              <label>
+                <span>Alínea (opcional)</span>
+                <input
+                  value={draft.legalLetter}
+                  onChange={(event) =>
+                    setDraft({ ...draft, legalLetter: event.target.value })
+                  }
+                  placeholder="Ex.: a"
+                />
+              </label>
+              <label>
+                <span>Item (opcional)</span>
+                <input
+                  value={draft.legalItem}
+                  onChange={(event) =>
+                    setDraft({ ...draft, legalItem: event.target.value })
+                  }
+                  placeholder="Ex.: 1 ou I"
                 />
               </label>
               <label className="form-span-2">
@@ -844,98 +989,106 @@ export function MasterPlanModule() {
               <button
                 className="icon-only-button"
                 type="button"
-                onClick={() => setSuggestionOpen(false)}
+                onClick={closeSuggestion}
               >
                 <X size={20} />
               </button>
             </header>
             <p className="modal-intro">
-              Registre uma proposta para avaliação técnica e incorporação ao
-              processo de revisão.
+              Primeiro escolha a lei. Depois, acrescente livremente o título e
+              qualquer dispositivo que deseje alterar — todos esses campos são
+              opcionais.
             </p>
             <div className="record-form-grid">
-              <label className="form-span-2">
-                <span>Título da sugestão</span>
-                <input
-                  required
-                  value={suggestion.title}
-                  onChange={(event) =>
-                    setSuggestion({ ...suggestion, title: event.target.value })
-                  }
-                  placeholder="Síntese objetiva da proposta"
-                />
-              </label>
-              <label>
-                <span>Tema</span>
+              <label className="form-span-2 suggestion-law-picker">
+                <span>1. Escolha a lei</span>
                 <select
+                  required
                   value={suggestion.theme}
                   onChange={(event) =>
                     setSuggestion({ ...suggestion, theme: event.target.value })
                   }
                 >
-                  {[
-                    "Uso e ocupação do solo",
-                    "Sistema viário",
-                    "Habitação",
-                    "Meio ambiente",
-                    "Mobilidade",
-                    "Desenvolvimento econômico",
-                    "Equipamentos públicos",
-                    "Patrimônio cultural",
-                    "Outro",
-                  ].map((value) => (
+                  <option value="" disabled>
+                    Selecione a lei para continuar
+                  </option>
+                  {LAWS.map((value) => (
                     <option key={value}>{value}</option>
                   ))}
                 </select>
               </label>
-              <label>
-                <span>Responsável pela análise</span>
-                <select
-                  value={suggestion.responsible}
-                  onChange={(event) =>
-                    setSuggestion({
-                      ...suggestion,
-                      responsible: event.target.value,
-                    })
-                  }
-                >
-                  {RESPONSIBLE_OPTIONS.map((value) => (
-                    <option key={value}>{value}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="form-span-2">
-                <span>Descrição detalhada</span>
-                <textarea
-                  required
-                  rows={6}
-                  value={suggestion.description}
-                  onChange={(event) =>
-                    setSuggestion({
-                      ...suggestion,
-                      description: event.target.value,
-                    })
-                  }
-                  placeholder="Explique o problema, a proposta e os benefícios esperados"
-                />
-              </label>
-              <label className="form-span-2">
-                <span>Proponente ou entidade</span>
-                <input
-                  value={suggestion.proposer}
-                  onChange={(event) =>
-                    setSuggestion({
-                      ...suggestion,
-                      proposer: event.target.value,
-                    })
-                  }
-                  placeholder="Nome, entidade ou comunidade"
-                />
-              </label>
+              {suggestion.theme ? (
+                <>
+                  <label className="form-span-2">
+                    <span>2. Título da sugestão (opcional)</span>
+                    <input
+                      value={suggestion.title}
+                      onChange={(event) =>
+                        setSuggestion({ ...suggestion, title: event.target.value })
+                      }
+                      placeholder="Síntese objetiva da proposta"
+                    />
+                  </label>
+                  <label>
+                    <span>Artigo (opcional)</span>
+                    <input value={suggestion.article} onChange={(event) => setSuggestion({ ...suggestion, article: event.target.value })} placeholder="Ex.: 12" />
+                  </label>
+                  <label>
+                    <span>Parágrafo (opcional)</span>
+                    <input value={suggestion.paragraph} onChange={(event) => setSuggestion({ ...suggestion, paragraph: event.target.value })} placeholder="Ex.: 2º ou único" />
+                  </label>
+                  <label>
+                    <span>Alínea (opcional)</span>
+                    <input value={suggestion.letter} onChange={(event) => setSuggestion({ ...suggestion, letter: event.target.value })} placeholder="Ex.: a" />
+                  </label>
+                  <label>
+                    <span>Item (opcional)</span>
+                    <input value={suggestion.item} onChange={(event) => setSuggestion({ ...suggestion, item: event.target.value })} placeholder="Ex.: 1 ou I" />
+                  </label>
+                  <label>
+                    <span>Responsável pela análise</span>
+                    <select
+                      value={suggestion.responsible}
+                      onChange={(event) =>
+                        setSuggestion({ ...suggestion, responsible: event.target.value })
+                      }
+                    >
+                      {RESPONSIBLE_OPTIONS.map((value) => (
+                        <option key={value}>{value}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="form-span-2">
+                    <span>Descrição detalhada (opcional)</span>
+                    <textarea
+                      rows={6}
+                      value={suggestion.description}
+                      onChange={(event) =>
+                        setSuggestion({ ...suggestion, description: event.target.value })
+                      }
+                      placeholder="Explique o problema, a proposta e os benefícios esperados"
+                    />
+                  </label>
+                  <label className="form-span-2">
+                    <span>Proponente ou entidade (opcional)</span>
+                    <input
+                      value={suggestion.proposer}
+                      onChange={(event) =>
+                        setSuggestion({ ...suggestion, proposer: event.target.value })
+                      }
+                      placeholder="Nome, entidade ou comunidade"
+                    />
+                  </label>
+                </>
+              ) : (
+                <div className="form-span-2 suggestion-waiting">
+                  Os demais campos serão exibidos após a escolha da lei.
+                </div>
+              )}
             </div>
             {error ? <div className="form-error">{error}</div> : null}
             <div className="editor-actions">
-              <button className="primary-button" disabled={saving}>
+              <button className="primary-button" disabled={saving || !suggestion.theme}>
                 {saving ? (
                   <LoaderCircle className="spin" size={18} />
                 ) : (
@@ -946,7 +1099,7 @@ export function MasterPlanModule() {
               <button
                 className="secondary-button"
                 type="button"
-                onClick={() => setSuggestionOpen(false)}
+                onClick={closeSuggestion}
               >
                 Cancelar
               </button>

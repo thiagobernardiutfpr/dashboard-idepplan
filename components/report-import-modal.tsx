@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import type { EmpresaFacilImportRecord, ItemModule } from "@/lib/dashboard-types";
+import { readApiJson, uploadAttachment } from "@/lib/api-client";
 import { enrichRowsWithPropertyCoordinates } from "@/lib/property-coordinates-client";
 
 type ImportSummary = {
@@ -328,6 +329,7 @@ export function ReportImportModal({ open, onClose, onImported }: ReportImportMod
   const [state, setState] = useState<"idle" | "parsing" | "ready" | "importing" | "success">("idle");
   const [error, setError] = useState("");
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   function closeModal() {
     setFile(null);
@@ -337,6 +339,7 @@ export function ReportImportModal({ open, onClose, onImported }: ReportImportMod
     setState("idle");
     setError("");
     setSummary(null);
+    setUploadProgress(0);
     if (inputRef.current) inputRef.current.value = "";
     onClose();
   }
@@ -348,6 +351,7 @@ export function ReportImportModal({ open, onClose, onImported }: ReportImportMod
     setGenericInspection(null);
     setAutomaticCoordinateCount(0);
     setSummary(null);
+    setUploadProgress(0);
     setError("");
     setState("idle");
     if (inputRef.current) inputRef.current.value = "";
@@ -404,14 +408,14 @@ export function ReportImportModal({ open, onClose, onImported }: ReportImportMod
     if (!file || state !== "ready") return;
     setState("importing");
     setError("");
+    setUploadProgress(0);
     try {
-      const form = new FormData();
-      form.set("module", destination);
-      form.set("itemId", "__module__");
-      form.set("file", file);
-      const attachmentResponse = await fetch("/api/attachments", { method: "POST", body: form });
-      const attachmentPayload = (await attachmentResponse.json()) as { error?: string };
-      if (!attachmentResponse.ok) throw new Error(attachmentPayload.error ?? "Não foi possível armazenar o relatório no módulo.");
+      await uploadAttachment({
+        file,
+        module: destination,
+        itemId: "__module__",
+        onProgress: (value) => setUploadProgress(Math.round(value * 0.45)),
+      });
 
       const response = await fetch("/api/report-imports", {
         method: "POST",
@@ -424,11 +428,12 @@ export function ReportImportModal({ open, onClose, onImported }: ReportImportMod
           records,
         }),
       });
-      const payload = (await response.json()) as { import?: ImportSummary; error?: string };
+      const payload = await readApiJson<{ import?: ImportSummary; error?: string }>(response);
       if (!response.ok || !payload.import) {
         throw new Error(payload.error ?? "Não foi possível importar o relatório.");
       }
       const imported = { ...payload.import, fileStored: true };
+      setUploadProgress(100);
       setSummary(imported);
       setState("success");
       onImported(imported, destination);
@@ -537,7 +542,7 @@ export function ReportImportModal({ open, onClose, onImported }: ReportImportMod
               <button className="secondary-button" type="button" onClick={closeModal} disabled={state === "importing"}>Cancelar</button>
               <button className="primary-button" type="button" onClick={() => void importReport()} disabled={state !== "ready"}>
                 {state === "importing" ? <LoaderCircle size={18} className="spin" /> : <Database size={18} />}
-                {state === "importing" ? "Importando…" : `Importar para ${destinationLabel}`}
+                {state === "importing" ? `Importando${uploadProgress ? ` · ${uploadProgress}%` : "…"}` : `Importar para ${destinationLabel}`}
               </button>
             </div>
           </>
