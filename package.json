@@ -4,7 +4,7 @@
   "private": true,
   "engines": { "node": ">=22.13.0" },
   "scripts": {
-    "install:ci": "npm ci",
+    "install:ci": "bash scripts/install-ci.sh",
     "dev": "vite",
     "build": "vite build",
     "build:sites": "bash scripts/build-verified.sh",
