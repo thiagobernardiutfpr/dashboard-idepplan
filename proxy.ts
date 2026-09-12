@@ -13,6 +13,10 @@ const PUBLIC_PATHS = new Set([
   "/idepplan-2026.png",
 ]);
 
+const ATENDE_MACHINE_PATHS = new Set([
+  "/api/integrations/atende/processes",
+]);
+
 function isPublicAsset(pathname: string) {
   return (
     pathname.startsWith("/_next/") ||
@@ -32,7 +36,11 @@ function addSecurityHeaders(response: NextResponse) {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (PUBLIC_PATHS.has(pathname) || isPublicAsset(pathname)) {
+  if (
+    PUBLIC_PATHS.has(pathname) ||
+    ATENDE_MACHINE_PATHS.has(pathname) ||
+    isPublicAsset(pathname)
+  ) {
     return addSecurityHeaders(NextResponse.next());
   }
 

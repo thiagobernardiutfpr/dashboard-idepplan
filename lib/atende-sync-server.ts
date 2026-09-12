@@ -25,6 +25,7 @@ type SyncOptions = {
 };
 
 const INTEGRATION_USER = "integração Atende.Net";
+const CREDENTIAL_ID = "primary";
 
 function clean(value: unknown, maxLength = 4000) {
   return value == null ? "" : String(value).replace(/\s+/g, " ").trim().slice(0, maxLength);
@@ -40,9 +41,28 @@ function cleanDate(value: unknown) {
   return null;
 }
 
-async function shortHash(value: string) {
+async function sha256Hex(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest)).slice(0, 16).map((part) => part.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(digest)).map((part) => part.toString(16).padStart(2, "0")).join("");
+}
+
+async function shortHash(value: string) {
+  return (await sha256Hex(value)).slice(0, 32);
+}
+
+function base64Url(bytes: Uint8Array) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function secureEqual(left: string, right: string) {
+  if (left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return difference === 0;
 }
 
 function buildObservation(process: AtendeProcessInput) {
@@ -93,7 +113,66 @@ async function ensureTables() {
       sync_run_id TEXT NOT NULL, changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
     db.prepare("CREATE INDEX IF NOT EXISTS process_history_process_idx ON process_history (process_id, changed_at)"),
+    db.prepare(`CREATE TABLE IF NOT EXISTS atende_sync_credentials (
+      id TEXT PRIMARY KEY NOT NULL,
+      token_hash TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      revoked_at TEXT
+    )`),
   ]);
+}
+
+export async function getAtendeSyncCredentialStatus() {
+  await ensureTables();
+  const credential = await getD1Binding().prepare(
+    "SELECT created_by, created_at, revoked_at, token_hash FROM atende_sync_credentials WHERE id = ? LIMIT 1",
+  ).bind(CREDENTIAL_ID).first<Record<string, unknown>>();
+  return {
+    configured: Boolean(clean(credential?.token_hash, 128) && !credential?.revoked_at),
+    createdBy: clean(credential?.created_by, 180),
+    createdAt: clean(credential?.created_at, 80) || null,
+    revokedAt: clean(credential?.revoked_at, 80) || null,
+    environmentFallback: Boolean(process.env.ATENDE_SYNC_TOKEN?.trim()),
+  };
+}
+
+export async function generateAtendeSyncToken(createdBy: string) {
+  await ensureTables();
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const token = `atende_${base64Url(bytes)}`;
+  const tokenHash = await sha256Hex(token);
+  await getD1Binding().prepare(`INSERT INTO atende_sync_credentials
+    (id,token_hash,created_by,created_at,revoked_at) VALUES (?,?,?,CURRENT_TIMESTAMP,NULL)
+    ON CONFLICT(id) DO UPDATE SET token_hash=excluded.token_hash,created_by=excluded.created_by,
+      created_at=CURRENT_TIMESTAMP,revoked_at=NULL`)
+    .bind(CREDENTIAL_ID, tokenHash, clean(createdBy, 180) || "Dashboard IDEPPLAN").run();
+  return token;
+}
+
+export async function revokeAtendeSyncToken() {
+  await ensureTables();
+  await getD1Binding().prepare(
+    "UPDATE atende_sync_credentials SET token_hash = '', revoked_at = CURRENT_TIMESTAMP WHERE id = ?",
+  ).bind(CREDENTIAL_ID).run();
+}
+
+export async function verifyAtendeSyncToken(token: string) {
+  const supplied = clean(token, 300);
+  if (!supplied) return false;
+  await ensureTables();
+  const credential = await getD1Binding().prepare(
+    "SELECT token_hash, revoked_at FROM atende_sync_credentials WHERE id = ? LIMIT 1",
+  ).bind(CREDENTIAL_ID).first<Record<string, unknown>>();
+  const storedHash = clean(credential?.token_hash, 128);
+  if (storedHash && !credential?.revoked_at) {
+    const suppliedHash = await sha256Hex(supplied);
+    if (secureEqual(storedHash, suppliedHash)) return true;
+  }
+  const fallback = process.env.ATENDE_SYNC_TOKEN?.trim() ?? "";
+  if (!fallback) return false;
+  return secureEqual(await sha256Hex(fallback), await sha256Hex(supplied));
 }
 
 export async function listAtendeSyncRuns(limit = 20) {
