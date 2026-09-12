@@ -1,4 +1,9 @@
-import { listAtendeSyncRuns, synchronizeAtendeProcesses, type AtendeProcessInput } from "@/lib/atende-sync-server";
+import {
+  listAtendeSyncRuns,
+  synchronizeAtendeProcesses,
+  verifyAtendeSyncToken,
+  type AtendeProcessInput,
+} from "@/lib/atende-sync-server";
 
 export const dynamic = "force-dynamic";
 
@@ -7,17 +12,11 @@ function unauthorized() {
 }
 
 async function authorized(request: Request) {
-  const expected = process.env.ATENDE_SYNC_TOKEN?.trim();
-  if (!expected) return false;
   const value = request.headers.get("authorization") ?? "";
   if (!value.startsWith("Bearer ")) return false;
   const supplied = value.slice("Bearer ".length).trim();
   if (!supplied) return false;
-  const [a, b] = await Promise.all([expected, supplied].map(async (text) => {
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-    return new Uint8Array(digest);
-  }));
-  return a.length === b.length && a.every((byte, index) => byte === b[index]);
+  return verifyAtendeSyncToken(supplied);
 }
 
 export async function GET(request: Request) {
