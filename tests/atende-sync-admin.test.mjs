@@ -28,15 +28,16 @@ test("admin do Atende gera e revoga token armazenando somente hash", async () =>
 
 test("rota máquina-a-máquina aceita token D1 além do fallback de ambiente", async () => {
   const route = await source("app/api/integrations/atende/processes/route.ts");
+  const sync = await source("lib/atende-sync-server.ts");
   assert.match(route, /verifyAtendeSyncToken/);
-  assert.match(route, /ATENDE_SYNC_TOKEN/);
+  assert.match(sync, /ATENDE_SYNC_TOKEN/);
 });
 
-test("dashboard expõe painel de Integração Atende.Net", async () => {
-  const dashboard = await source("components/dashboard.tsx");
+test("dashboard possui página protegida de Integração Atende.Net", async () => {
+  const page = await source("app/integracoes/atende/page.tsx");
   const panel = await source("components/atende-sync-panel.tsx");
-  assert.match(dashboard, /AtendeSyncPanel/);
-  assert.match(dashboard, /Integração Atende.Net/);
+  assert.match(page, /AtendeSyncPanel/);
+  assert.match(page, /Integração Atende.Net/);
   assert.match(panel, /Gerar nova chave/);
   assert.match(panel, /Revogar chave/);
   assert.match(panel, /Última sincronização/);
