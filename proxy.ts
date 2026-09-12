@@ -17,6 +17,13 @@ const ATENDE_MACHINE_PATHS = new Set([
   "/api/integrations/atende/processes",
 ]);
 
+function isAtendeMachineRequest(request: NextRequest) {
+  return (
+    ATENDE_MACHINE_PATHS.has(request.nextUrl.pathname) &&
+    (request.method === "GET" || request.method === "POST")
+  );
+}
+
 function isPublicAsset(pathname: string) {
   return (
     pathname.startsWith("/_next/") ||
@@ -38,7 +45,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (
     PUBLIC_PATHS.has(pathname) ||
-    ATENDE_MACHINE_PATHS.has(pathname) ||
+    isAtendeMachineRequest(request) ||
     isPublicAsset(pathname)
   ) {
     return addSecurityHeaders(NextResponse.next());

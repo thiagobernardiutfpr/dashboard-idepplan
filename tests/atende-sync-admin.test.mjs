@@ -6,10 +6,13 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("proxy libera apenas a rota servidor-servidor do Atende", async () => {
+test("proxy libera somente GET e POST da rota servidor-servidor do Atende", async () => {
   const proxy = await source("proxy.ts");
   assert.match(proxy, /\/api\/integrations\/atende\/processes/);
   assert.match(proxy, /ATENDE_MACHINE_PATHS/);
+  assert.match(proxy, /request\.method === "GET"/);
+  assert.match(proxy, /request\.method === "POST"/);
+  assert.match(proxy, /isAtendeMachineRequest/);
 });
 
 test("admin do Atende gera e revoga token armazenando somente hash", async () => {
@@ -44,4 +47,10 @@ test("dashboard possui página protegida de Integração Atende.Net", async () =
   assert.match(panel, /Novos/);
   assert.match(panel, /Atualizados/);
   assert.match(panel, /Sem alteração/);
+});
+
+test("página principal oferece acesso visível à Integração Atende.Net", async () => {
+  const home = await source("app/page.tsx");
+  assert.match(home, /href="\/integracoes\/atende"/);
+  assert.match(home, /Integração Atende\.Net/);
 });
