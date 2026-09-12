@@ -49,8 +49,8 @@ test("dashboard possui página protegida de Integração Atende.Net", async () =
   assert.match(panel, /Sem alteração/);
 });
 
-test("menu principal oferece acesso visível à Integração Atende.Net", async () => {
-  const dashboard = await source("components/dashboard.tsx");
-  assert.match(dashboard, /href="\/integracoes\/atende"/);
-  assert.match(dashboard, /Integração Atende\.Net/);
+test("página principal oferece acesso visível à Integração Atende.Net", async () => {
+  const home = await source("app/page.tsx");
+  assert.match(home, /href="\/integracoes\/atende"/);
+  assert.match(home, /Integração Atende\.Net/);
 });
