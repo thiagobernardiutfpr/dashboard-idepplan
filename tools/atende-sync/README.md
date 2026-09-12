@@ -13,13 +13,17 @@ Sincronizador do **Relatório Estatístico por Centro de Custos** do Atende.Net 
 
 ## Primeiro uso
 
-1. Configure no ambiente do dashboard a variável `ATENDE_SYNC_TOKEN` com um token aleatório de pelo menos 32 caracteres.
-2. No Windows, crie a mesma variável de ambiente `ATENDE_SYNC_TOKEN` para a conta que executará a tarefa.
-3. Execute `AtendeSync.exe --setup-login`.
-4. Faça login normalmente no Atende.Net e aguarde a tela principal carregar.
-5. Volte ao executável e pressione **Enter**. Apenas a sessão do navegador é preservada no perfil exclusivo.
-6. Execute `AtendeSync.exe` para uma sincronização de teste.
-7. Se o teste concluir, cadastre o executável no Agendador de Tarefas do Windows para rodar diariamente.
+1. Entre normalmente no Dashboard IDEPPLAN.
+2. Abra `/integracoes/atende` e clique em **Gerar nova chave**.
+3. Copie a chave exibida; ela aparece apenas uma vez. O Dashboard armazena somente o hash SHA-256.
+4. No Windows, defina a variável de ambiente `ATENDE_SYNC_TOKEN` com essa chave para a conta que executará a tarefa.
+5. Execute `AtendeSync.exe --setup-login`.
+6. Faça login normalmente no Atende.Net e aguarde a tela principal carregar.
+7. Volte ao executável e pressione **Enter**. Apenas a sessão do navegador é preservada no perfil exclusivo.
+8. Execute `AtendeSync.exe` para uma sincronização de teste.
+9. Se o teste concluir, cadastre o executável no Agendador de Tarefas do Windows para rodar diariamente.
+
+A variável `ATENDE_SYNC_TOKEN` configurada no ambiente do servidor continua aceita apenas como fallback de compatibilidade, mas não é mais necessária quando uma chave D1 foi gerada pelo painel.
 
 ## Configuração
 
