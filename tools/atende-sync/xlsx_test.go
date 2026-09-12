@@ -21,7 +21,7 @@ func TestParseAtendeVerticalXLSX(t *testing.T) {
 <row r="4"><c r="A4" t="inlineStr"><is><t>Subassunto:</t></is></c><c r="B4" t="inlineStr"><is><t>1279 - WEB - Certidão de Endereço</t></is></c></row>
 <row r="5"><c r="A5" t="inlineStr"><is><t>Observação:</t></is></c><c r="B5" t="inlineStr"><is><t>LOTE: 24 Q: 04 B: TEXAS IMOB: 116.243.0451.001 RUA APARECIDA ALVES VICENTE Nº 100</t></is></c></row>
 <row r="6"><c r="A6" t="inlineStr"><is><t>12346/2026</t></is></c><c r="B6" t="inlineStr"><is><t>Abertura</t></is></c><c r="E6" t="inlineStr"><is><t>JOÃO TESTE</t></is></c><c r="J6" t="inlineStr"><is><t>13/09/2026</t></is></c></row>
-<row r="7"><c r="A7" t="inlineStr"><is><t>Subassunto:</t></is></c><c r="B7" t="inlineStr"><is><t>1037 - EXCLUIR</t></is></c></row>
+<row r="7"><c r="A7" t="inlineStr"><is><t>Subassunto:</t></is></c><c r="B7" t="inlineStr"><is><t>1037 - TAMBÉM DEVE SER IMPORTADO</t></is></c></row>
 </sheetData></worksheet>`
 	if _, err := sheet.Write([]byte(xml)); err != nil { t.Fatal(err) }
 	if err := zw.Close(); err != nil { t.Fatal(err) }
@@ -29,7 +29,7 @@ func TestParseAtendeVerticalXLSX(t *testing.T) {
 
 	got, err := ParseAtendeXLSX(path)
 	if err != nil { t.Fatal(err) }
-	if len(got) != 1 { t.Fatalf("esperava 1 processo após exclusão, recebeu %d", len(got)) }
+	if len(got) != 2 { t.Fatalf("esperava 2 processos, recebeu %d", len(got)) }
 	p := got[0]
 	if p.ProcessNumber != "12345/2026" || p.Applicant != "MARIA TESTE" || p.Status != "Trâmite" { t.Fatalf("processo básico incorreto: %#v", p) }
 	if p.OpenedAt != "2026-09-12" { t.Fatalf("data incorreta: %s", p.OpenedAt) }
